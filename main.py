@@ -15,7 +15,7 @@ db = client[DB_NAME]
 channels_collection = db[COLLECTION_NAME]
 
 # Global forwarding status
-forwarding_status = {'active': False}
+forwarding_status = {'active': False, 'waiting_for_start_message': False}
 
 # Command to set the source channel
 def set_source(update: Update, context: CallbackContext):
@@ -58,6 +58,18 @@ def handle_forwarded_message(update: Update, context: CallbackContext):
             update.message.reply_text("This message does not appear to be forwarded from a channel.")
         context.user_data['waiting_for_target'] = False
 
+    elif forwarding_status['waiting_for_start_message']:
+        settings = channels_collection.find_one({'_id': 'settings'})
+        if update.message.forward_from_chat and update.message.forward_from_chat.id == settings.get('source'):
+            forwarding_status['start_message'] = update.message.message_id
+            forwarding_status['waiting_for_start_message'] = False
+            forwarding_status['active'] = True
+            update.message.reply_text(
+                f"Starting message set. Forwarding messages from message ID {forwarding_status['start_message']}."
+            )
+        else:
+            update.message.reply_text("Please forward a message from the source channel.")
+
 # Command to display current settings
 def show_settings(update: Update, context: CallbackContext):
     settings = channels_collection.find_one({'_id': 'settings'})
@@ -87,10 +99,9 @@ def start_forward(update: Update, context: CallbackContext):
         return
 
     update.message.reply_text(
-        "Forwarding started! Please forward the starting message from the source channel."
+        "Please forward the starting message from the source channel to begin forwarding."
     )
-    forwarding_status['active'] = True
-    forwarding_status['start_message'] = None
+    forwarding_status['waiting_for_start_message'] = True
 
 # Command to stop forwarding
 def stop_forward(update: Update, context: CallbackContext):
@@ -112,15 +123,6 @@ def forward_message(update: Update, context: CallbackContext):
     source_id = settings.get('source')
     target_id = settings.get('target')
 
-    if not forwarding_status['start_message']:
-        # Set the starting message
-        if update.message.chat.id == source_id:
-            forwarding_status['start_message'] = update.message.message_id
-            update.message.reply_text(
-                f"Starting message set. Forwarding messages from message ID {forwarding_status['start_message']}."
-            )
-        return
-
     if update.message.chat.id == source_id:
         try:
             # Forward the message to the target channel
@@ -129,18 +131,6 @@ def forward_message(update: Update, context: CallbackContext):
                 from_chat_id=source_id,
                 message_id=update.message.message_id
             )
-
-            # Display progress
-            current_msg_id = update.message.message_id
-            total_msgs = current_msg_id - forwarding_status['start_message'] + 1
-            progress = int((current_msg_id - forwarding_status['start_message'] + 1) / total_msgs * 100)
-            estimated_time = total_msgs * 2  # Assuming 2 seconds per message
-
-            update.message.reply_text(
-                f"Forwarding progress: {progress}%\n"
-                f"Estimated time remaining: {estimated_time} seconds."
-            )
-
             time.sleep(2)  # Delay to avoid hitting Telegram rate limits
         except Exception as e:
             update.message.reply_text(f"Error forwarding message: {e}")
@@ -185,4 +175,4 @@ def main():
 
 if __name__ == '__main__':
     main()
-                    
+            
