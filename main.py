@@ -15,7 +15,7 @@ db = client[DB_NAME]
 channels_collection = db[COLLECTION_NAME]
 
 # Global forwarding status
-forwarding_status = {'active': False, 'waiting_for_start_message': False, 'start_message': None}
+forwarding_status = {'active': False, 'waiting_for_start_message': False, 'start_message': None, 'source_id': None, 'target_id': None}
 
 # Command to set the source channel
 def set_source(update: Update, context: CallbackContext):
@@ -41,6 +41,7 @@ def handle_forwarded_message(update: Update, context: CallbackContext):
                 upsert=True
             )
             update.message.reply_text(f"Source channel set successfully: {source_id}")
+            forwarding_status['source_id'] = source_id
         else:
             update.message.reply_text("This message does not appear to be forwarded from a channel.")
         context.user_data['waiting_for_source'] = False
@@ -54,6 +55,7 @@ def handle_forwarded_message(update: Update, context: CallbackContext):
                 upsert=True
             )
             update.message.reply_text(f"Target channel set successfully: {target_id}")
+            forwarding_status['target_id'] = target_id
         else:
             update.message.reply_text("This message does not appear to be forwarded from a channel.")
         context.user_data['waiting_for_target'] = False
@@ -124,19 +126,21 @@ def forward_message(update: Update, context: CallbackContext):
     source_id = settings.get('source')
     target_id = settings.get('target')
 
-    # Forward messages only if they are from the source channel and meet the condition
-    if update.message.chat.id == source_id and update.message.message_id >= forwarding_status['start_message']:
-        try:
-            # Forward the message to the target channel
-            context.bot.forward_message(
-                chat_id=target_id,
-                from_chat_id=source_id,
-                message_id=update.message.message_id
-            )
-            time.sleep(2)  # Delay to avoid hitting Telegram rate limits
-        except Exception as e:
-            update.message.reply_text(f"Error forwarding message: {e}")
-            forwarding_status['active'] = False
+    # Ensure that we only forward messages from the source channel after the starting message ID
+    if update.message.chat.id == source_id:
+        # Check if the message is greater than or equal to the starting message ID
+        if update.message.message_id >= forwarding_status['start_message']:
+            try:
+                # Forward the message to the target channel
+                context.bot.forward_message(
+                    chat_id=target_id,
+                    from_chat_id=source_id,
+                    message_id=update.message.message_id
+                )
+                time.sleep(2)  # Delay to avoid hitting Telegram rate limits
+            except Exception as e:
+                update.message.reply_text(f"Error forwarding message: {e}")
+                forwarding_status['active'] = False
 
 # Start command
 def start(update: Update, context: CallbackContext):
@@ -177,4 +181,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-        
