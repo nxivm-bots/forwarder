@@ -19,7 +19,17 @@ forwarding_status = {'active': False}
 
 # Command to set the source channel
 def set_source(update: Update, context: CallbackContext):
-    if update.message.forward_from_chat:
+    if context.args:
+        # Set source by providing the channel ID directly
+        source_id = context.args[0]
+        channels_collection.update_one(
+            {'_id': 'settings'},
+            {'$set': {'source': source_id}},
+            upsert=True
+        )
+        update.message.reply_text(f"Source channel set successfully: {source_id}")
+    elif update.message.forward_from_chat:
+        # Set source by forwarding a message from the channel
         source_id = update.message.forward_from_chat.id
         channels_collection.update_one(
             {'_id': 'settings'},
@@ -28,11 +38,25 @@ def set_source(update: Update, context: CallbackContext):
         )
         update.message.reply_text(f"Source channel set successfully: {source_id}")
     else:
-        update.message.reply_text("Please forward a message from the source channel to set it.")
+        update.message.reply_text(
+            "Usage:\n"
+            "1. Forward a message from the source channel and use /setsource.\n"
+            "2. Use /setsource <channel_id> to set the channel manually."
+        )
 
 # Command to set the target channel
 def set_target(update: Update, context: CallbackContext):
-    if update.message.forward_from_chat:
+    if context.args:
+        # Set target by providing the channel ID directly
+        target_id = context.args[0]
+        channels_collection.update_one(
+            {'_id': 'settings'},
+            {'$set': {'target': target_id}},
+            upsert=True
+        )
+        update.message.reply_text(f"Target channel set successfully: {target_id}")
+    elif update.message.forward_from_chat:
+        # Set target by forwarding a message from the channel
         target_id = update.message.forward_from_chat.id
         channels_collection.update_one(
             {'_id': 'settings'},
@@ -41,7 +65,11 @@ def set_target(update: Update, context: CallbackContext):
         )
         update.message.reply_text(f"Target channel set successfully: {target_id}")
     else:
-        update.message.reply_text("Please forward a message from the target channel to set it.")
+        update.message.reply_text(
+            "Usage:\n"
+            "1. Forward a message from the target channel and use /settarget.\n"
+            "2. Use /settarget <channel_id> to set the channel manually."
+        )
 
 # Command to show current settings
 def show_settings(update: Update, context: CallbackContext):
@@ -64,7 +92,7 @@ def start_forward(update: Update, context: CallbackContext):
 
     forwarding_status['active'] = True
     update.message.reply_text(
-        "Forwarding started! Please forward a message from the source channel to begin forwarding."
+        "Forwarding started! Messages from the source channel will now be forwarded to the target channel."
     )
 
 # Command to stop forwarding
@@ -90,11 +118,11 @@ def forward_message(update: Update, context: CallbackContext):
         return
 
     # Only forward if the message is from the source channel
-    if update.message.chat.id == source_id:
+    if update.message.chat.id == int(source_id):
         try:
             # Forward the message to the target channel
             context.bot.forward_message(
-                chat_id=target_id,
+                chat_id=int(target_id),
                 from_chat_id=update.message.chat.id,
                 message_id=update.message.message_id
             )
@@ -107,8 +135,8 @@ def start(update: Update, context: CallbackContext):
     update.message.reply_text(
         "Welcome to the Forwarding Bot!\n"
         "Commands:\n"
-        "/setsource - Set the source channel by forwarding a message.\n"
-        "/settarget - Set the target channel by forwarding a message.\n"
+        "/setsource <channel_id> - Set the source channel manually or by forwarding a message.\n"
+        "/settarget <channel_id> - Set the target channel manually or by forwarding a message.\n"
         "/settings - View current settings.\n"
         "/forward - Start forwarding messages.\n"
         "/stop - Stop forwarding messages."
@@ -121,8 +149,8 @@ def main():
 
     # Command handlers
     dispatcher.add_handler(CommandHandler('start', start))
-    dispatcher.add_handler(CommandHandler('setsource', set_source))
-    dispatcher.add_handler(CommandHandler('settarget', set_target))
+    dispatcher.add_handler(CommandHandler('setsource', set_source, pass_args=True))
+    dispatcher.add_handler(CommandHandler('settarget', set_target, pass_args=True))
     dispatcher.add_handler(CommandHandler('settings', show_settings))
     dispatcher.add_handler(CommandHandler('forward', start_forward))
     dispatcher.add_handler(CommandHandler('stop', stop_forward))
@@ -136,4 +164,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-  
