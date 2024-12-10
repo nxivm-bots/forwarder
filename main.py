@@ -15,7 +15,7 @@ db = client[DB_NAME]
 channels_collection = db[COLLECTION_NAME]
 
 # Global forwarding status
-forwarding_status = {'active': False, 'waiting_for_start_message': False}
+forwarding_status = {'active': False, 'waiting_for_start_message': False, 'start_message': None}
 
 # Command to set the source channel
 def set_source(update: Update, context: CallbackContext):
@@ -111,6 +111,7 @@ def stop_forward(update: Update, context: CallbackContext):
         return
 
     forwarding_status['active'] = False
+    forwarding_status['start_message'] = None
     update.message.reply_text("Forwarding process stopped.")
 
 # Forward messages from the source to the target
@@ -123,7 +124,8 @@ def forward_message(update: Update, context: CallbackContext):
     source_id = settings.get('source')
     target_id = settings.get('target')
 
-    if update.message.chat.id == source_id:
+    # Forward messages only if they are from the source channel and meet the condition
+    if update.message.chat.id == source_id and update.message.message_id >= forwarding_status['start_message']:
         try:
             # Forward the message to the target channel
             context.bot.forward_message(
@@ -175,4 +177,4 @@ def main():
 
 if __name__ == '__main__':
     main()
-            
+        
